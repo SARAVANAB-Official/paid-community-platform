@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { publicApi, adminApi, attachAdminToken } from '../api/client.js';
 
@@ -10,13 +10,29 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
-  // If already logged in (valid token in localStorage), redirect to dashboard
+  // Check if already logged in and redirect if so
   useEffect(() => {
     const existingToken = localStorage.getItem(ADMIN_TOKEN_KEY);
     if (existingToken) {
       attachAdminToken(adminApi, existingToken);
-      navigate('/admin/dashboard', { replace: true });
+      // Verify token is still valid by testing a request
+      adminApi
+        .get('/admin/stats')
+        .then(() => {
+          navigate('/admin/dashboard', { replace: true });
+        })
+        .catch(() => {
+          // Token is invalid, clear it
+          localStorage.removeItem(ADMIN_TOKEN_KEY);
+          attachAdminToken(adminApi, null);
+        })
+        .finally(() => {
+          setCheckingSession(false);
+        });
+    } else {
+      setCheckingSession(false);
     }
   }, [navigate]);
 
@@ -37,16 +53,36 @@ export default function AdminLoginPage() {
       attachAdminToken(adminApi, data.token);
       navigate('/admin/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please check your connection and try again.'
+          : err.response?.data?.message || 'Login failed. Please check your credentials.'
+      );
     } finally {
       setLoading(false);
     }
   }
 
+  // Show loading state while checking session
+  if (checkingSession) {
+    return (
+      <div className="app-shell">
+        <div className="topbar">
+          <div className="brand">Admin</div>
+          <Link to="/payment">Member area</Link>
+        </div>
+        <div className="card" style={{ maxWidth: 400, margin: '0 auto' }}>
+          <p className="muted">Checking admin session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <div className="topbar">
-        <div className="brand">Admin</div>
+        <div className="brand">Admin sign in</div>
         <Link to="/payment">Member area</Link>
       </div>
       <div className="card" style={{ maxWidth: 400, margin: '0 auto' }}>

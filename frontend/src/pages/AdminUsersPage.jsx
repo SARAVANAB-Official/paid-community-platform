@@ -31,7 +31,12 @@ export default function AdminUsersPage() {
         navigate('/admin', { replace: true });
         return;
       }
-      setError(err.response?.data?.message || 'Could not load users');
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please check your connection and try again.'
+          : err.response?.data?.message || 'Could not load users'
+      );
     }
   }, [navigate, queryString]);
 
@@ -53,7 +58,18 @@ export default function AdminUsersPage() {
       await adminApi.delete(`/admin/users/${id}`);
       await load();
     } catch (err) {
-      setError(err.response?.data?.message || 'Delete failed');
+      if (err.response?.status === 401) {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        attachAdminToken(adminApi, null);
+        navigate('/admin', { replace: true });
+        return;
+      }
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please try again.'
+          : err.response?.data?.message || 'Delete failed'
+      );
     } finally {
       setBusyId(null);
     }

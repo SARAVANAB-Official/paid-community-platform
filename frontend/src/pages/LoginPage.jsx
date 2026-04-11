@@ -22,7 +22,12 @@ export default function LoginPage() {
       setUser(data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please check your connection and try again.'
+          : err.response?.data?.message || 'Login failed. Please check your credentials.'
+      );
     } finally {
       setLoading(false);
     }

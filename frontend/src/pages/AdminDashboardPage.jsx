@@ -21,7 +21,12 @@ export default function AdminDashboardPage() {
         navigate('/admin', { replace: true });
         return;
       }
-      setError(err.response?.data?.message || 'Could not load dashboard');
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please check your connection and try again.'
+          : err.response?.data?.message || 'Could not load dashboard'
+      );
     }
   }
 

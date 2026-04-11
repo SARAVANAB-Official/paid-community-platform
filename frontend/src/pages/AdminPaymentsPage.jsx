@@ -39,7 +39,12 @@ export default function AdminPaymentsPage() {
         navigate('/admin', { replace: true });
         return;
       }
-      setError(err.response?.data?.message || 'Could not load payments');
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please check your connection and try again.'
+          : err.response?.data?.message || 'Could not load payments'
+      );
     }
   }, [navigate, queryString]);
 
@@ -60,7 +65,18 @@ export default function AdminPaymentsPage() {
       await adminApi.patch(`/admin/payments/${id}/verify`, { action });
       await load();
     } catch (err) {
-      setError(err.response?.data?.message || 'Update failed');
+      if (err.response?.status === 401) {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        attachAdminToken(adminApi, null);
+        navigate('/admin', { replace: true });
+        return;
+      }
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please try again.'
+          : err.response?.data?.message || 'Update failed'
+      );
     } finally {
       setBusyId(null);
     }

@@ -37,7 +37,12 @@ export default function RegisterPage() {
       setUser(data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
+      const isNetworkError = !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server. Please check your connection and try again.'
+          : err.response?.data?.message || 'Registration failed'
+      );
     } finally {
       setLoading(false);
     }
@@ -80,7 +85,14 @@ export default function RegisterPage() {
           </div>
           <div className="field">
             <label>UPI Reference Number (same as payment)</label>
-            <input required value={utr} onChange={(e) => setUtr(e.target.value.replace(/\D/g, '').slice(0, 20))} inputMode="numeric" />
+            <input
+              required
+              value={utr}
+              onChange={(e) => setUtr(e.target.value.replace(/\D/g, '').slice(0, 20))}
+              inputMode="numeric"
+              placeholder="10-20 digit UPI Reference Number"
+            />
+            <div className="hint">Enter the same UPI Reference Number you used during payment</div>
           </div>
           <div className="field">
             <label>Referral code (optional)</label>
