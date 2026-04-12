@@ -1,80 +1,32 @@
-# Paid community platform
+# Paid Community Platform - Frontend Only
 
-Full-stack app: **₹120 UPI payment** → admin (or mock) verification → **registration** with optional **referral codes**, **JWT** auth, and an **admin** panel for users and payments.
+**₹120 UPI payment** → admin (or mock) verification → **registration** with optional **referral codes**, **JWT** auth, and an **admin** panel for users and payments.
+
+**🎯 Zero backend required!** Everything runs in the browser using localStorage.
 
 ## Stack
 
-- **Frontend:** React 18, Vite, React Router, Axios
-- **Backend:** Node.js 18+, Express, Mongoose, JWT, bcryptjs, express-validator, Multer (payment screenshots), QR code for UPI URI
-- **Database:** MongoDB
+- **Frontend:** React 18, Vite, React Router
+- **Database:** localStorage (browser storage)
+- **Cryptography:** Web Crypto API (SHA-256, HMAC-SHA256)
+- **QR Code:** qrcode library
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 18+
-- [MongoDB](https://www.mongodb.com/try/download/community) running locally or a connection string
+- No MongoDB needed!
+- No backend server needed!
 
-## Database schema (MongoDB collections)
+## Features
 
-### `users`
+✅ **Complete payment flow** - QR code generation, payment submission, status tracking  
+✅ **User authentication** - Registration, login, JWT tokens (browser-compatible)  
+✅ **Admin panel** - Approve/reject payments, manage users, view dashboard stats  
+✅ **Referral system** - Generate referral codes, track referrals  
+✅ **Dark theme UI** - Beautiful, responsive design  
+✅ **Zero backend dependencies** - Everything runs in the browser  
 
-| Field           | Type     | Notes                                      |
-|----------------|----------|--------------------------------------------|
-| `_id`          | ObjectId |                                            |
-| `name`         | String   | Required                                   |
-| `email`        | String   | Unique, lowercase                          |
-| `password`     | String   | bcrypt hash, `select: false` by default    |
-| `referralCode` | String   | Unique, uppercase                          |
-| `referredBy`   | String   | Referrer’s `referralCode` or null         |
-| `referralsCount` | Number | Default 0                                  |
-| `paymentApproved`| Boolean | **Must be true** to access dashboard       |
-| `createdAt` | Date | From timestamps                             |
-
-Indexes: `email`, `referralCode`.
-
-### `payments`
-
-| Field                   | Type     | Notes                                                    |
-|-------------------------|----------|----------------------------------------------------------|
-| `_id`                   | ObjectId |                                                          |
-| `name`                  | String   | From payment submission                                  |
-| `email`                 | String   | From payment submission                                  |
-| `utr`                   | String   | **Unique**, validated with `/^[A-Z0-9]{12,18}$/`         |
-| `screenshot`            | String   | Upload path/URL (`/uploads/payments/...`)                |
-| `status`                | String   | `pending` \| `approved` \| `rejected` \| `suspicious`    |
-| `amount`                | Number   | Default ₹120                                             |
-| `createdAt`             | Date     | From timestamps                                          |
-
-### `admins`
-
-| Field       | Type     | Notes                           |
-|------------|----------|---------------------------------|
-| `_id`      | ObjectId |                                 |
-| `email`    | String   | Unique                          |
-| `password` | String   | bcrypt hash                     |
-| `createdAt` / `updatedAt` | Date | From `timestamps: true` |
-
-### Referral relationships
-
-- New users may submit an optional **referral code** at registration (or open `/register?ref=CODE`).
-- On successful registration, `referredBy` stores the referrer’s code and the referrer’s `referralsCount` is incremented by 1.
-
-## Setup
-
-### 1. Backend
-
-```bash
-cd backend
-cp .env.example .env
-# Edit .env — set MONGODB_URI, JWT_SECRET, ADMIN_JWT_SECRET, UPI_VPA, etc.
-npm install
-npm run dev
-```
-
-API: `http://localhost:5000` (health: `GET /api/health`).
-
-On startup, a default admin is created if none exists (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in `.env`, or `admin@community.local` / `Admin123!`).
-
-### 2. Frontend
+## Quick Start
 
 ```bash
 cd frontend
@@ -82,56 +34,123 @@ npm install
 npm run dev
 ```
 
-App: `http://localhost:5173`. Vite proxies `/api` to the backend.
+App: `http://localhost:5173`
 
-Optional: copy `frontend/.env.example` to `.env` and set `VITE_API_URL` if the API is not on the same origin.
+**Default Admin:**
+- Email: `jagan@gmail.com`
+- Password: `jagan7523`
 
-### 3. End-to-end flow
+## End-to-end flow
 
-1. User opens **Payment**, scans UPI QR (config from `UPI_VPA` / `UPI_PAYEE_NAME`), pays ₹120, submits **transaction ID** (+ optional email).
+1. User opens **Payment**, scans UPI QR (config from `VITE_UPI_VPA` / `VITE_UPI_PAYEE_NAME`), pays ₹120, submits **UPI Reference Number**.
 2. **Admin** logs in at `/admin`, opens **Payments**, and **approves** the payment.
-3. User **registers** with the same **email + UTR**.
+3. User **registers** with the same **email + UPI Reference Number**.
 4. User **logs in** and sees the **dashboard** (platform member count, referral stats, link).
 
-## API overview
+## Pages
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/auth/register` | — | Register after payment is `approved` |
-| POST | `/api/auth/login` | — | User JWT |
-| GET | `/api/auth/me` | User JWT | **Requires** `paymentApproved=true` |
-| GET | `/api/payments/config` | — | UPI URI + QR data URL |
-| POST | `/api/payments/submit` | — | Submit `multipart/form-data` with screenshot → `pending` |
-| GET | `/api/payments/status` | — | Query `utr` |
-| POST | `/api/admin/login` | — | Admin JWT (`role: admin`) |
-| GET | `/api/admin/stats` | Admin | Counts |
-| GET | `/api/admin/users` | Admin | Users + linked payment snippet |
-| DELETE | `/api/admin/users/:id` | Admin | Delete user; adjusts referrer count if needed |
-| GET | `/api/admin/payments` | Admin | All payments |
-| PATCH | `/api/admin/payments/:id/verify` | Admin | Body: `{ "action": "approved" \| "rejected" \| "suspicious" \| "pending" }` |
+| Route | Description |
+|-------|-------------|
+| `/` | Redirects to `/payment` |
+| `/payment` | Payment page with QR code and form |
+| `/payment/pending?utr=xxx` | Check payment status |
+| `/register` | User registration (after payment approved) |
+| `/login` | Member login |
+| `/dashboard` | Member dashboard (protected) |
+| `/admin` | Admin login |
+| `/admin/dashboard` | Admin dashboard (protected) |
+| `/admin/users` | User management |
+| `/admin/payments` | Payment approval/rejection |
+
+## Environment Variables (Optional)
+
+Copy `frontend/.env.example` to `frontend/.env`:
+
+```env
+VITE_JWT_SECRET=your-secret-key-here
+VITE_ADMIN_JWT_SECRET=your-admin-secret-key-here
+VITE_PAYMENT_AMOUNT=120
+VITE_UPI_VPA=merchant@upi
+VITE_UPI_PAYEE_NAME=Community
+```
+
+## Data Storage
+
+All data is stored in your browser's `localStorage`:
+- `pc_db_users` - User accounts
+- `pc_db_payments` - Payment submissions
+- `pc_db_admins` - Admin accounts
+- `pc_user_token` - User authentication token
+- `pc_admin_token` - Admin authentication token
+
+**Note:** Clearing your browser data will delete all users, payments, and admin accounts.
+
+## Architecture
+
+```
+frontend/src/
+├── api/
+│   └── client.js          # API interceptor (routes to controllers)
+├── controllers/
+│   ├── authController.js  # Registration, login, me
+│   ├── paymentController.js # Payment config, submit, status
+│   └── adminController.js # Admin login, users, payments, stats
+├── db/
+│   └── index.js           # localStorage database layer (replaces MongoDB)
+├── utils/
+│   └── jwt.js             # Browser-compatible JWT utility
+├── context/
+│   └── AuthContext.jsx    # User authentication context
+├── pages/                 # All page components
+└── App.jsx                # Route definitions
+```
+
+## How It Works
+
+Instead of calling a backend API, this version:
+- Stores all data (users, payments, admins) in `localStorage`
+- Uses browser-compatible JWT signing/verification (Web Crypto API)
+- Uses SHA-256 for password hashing (Web Crypto API)
+- Intercepts all API calls and routes them to local controllers
+- Mimics the exact same logic as a backend version
+
+## Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment guides for:
+- Netlify
+- Vercel
+- GitHub Pages
+- Render (Static Site)
 
 ## Security notes
 
-- Use **strong** `JWT_SECRET` and `ADMIN_JWT_SECRET` in production.
-- Replace UPI details with your real **VPA**; consider a payment gateway for automated verification.
+- Use **strong** `VITE_JWT_SECRET` and `VITE_ADMIN_JWT_SECRET` in production.
+- Replace UPI details with your real **VPA**.
+- Password hashing uses SHA-256 (good for demo, use bcrypt for production backend).
 
 ## Project layout
 
 ```
 paid-community-platform/
-├── backend/
-│   ├── config/db.js
-│   ├── controllers/
-│   ├── middleware/
-│   ├── models/
-│   ├── routes/
-│   ├── scripts/seedAdmin.js
-│   └── server.js
-├── frontend/
-│   └── src/
-│       ├── api/client.js
-│       ├── context/AuthContext.jsx
-│       ├── pages/
-│       └── ...
-└── README.md
+├── .gitignore
+├── DEPLOYMENT.md
+├── README.md
+├── render.yaml
+└── frontend/
+    ├── package.json
+    ├── vite.config.js
+    ├── index.html
+    ├── netlify.toml
+    ├── README.md
+    └── src/
+        ├── api/client.js
+        ├── context/AuthContext.jsx
+        ├── controllers/
+        ├── db/
+        ├── pages/
+        └── utils/
 ```
+
+## License
+
+MIT
