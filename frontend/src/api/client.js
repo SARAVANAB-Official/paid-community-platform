@@ -28,21 +28,51 @@ export function createClient() {
 
   function matchRoute(method, path) {
     const key = `${method.toUpperCase()} ${path}`;
-    // Exact match
+    
+    // Exact match first
     if (routes[key]) return { handler: routes[key], params: {} };
-    // Dynamic match
+    
+    // Dynamic match: split pattern into method and path parts
     for (const pattern of Object.keys(routes)) {
-      const [pm, ...pp] = pattern.split(' ');
-      const [rm, ...rp] = key.split(' ');
-      if (pm !== rm || pp.length !== rp.length) continue;
+      const spaceIdx = pattern.indexOf(' ');
+      const patternMethod = pattern.slice(0, spaceIdx);
+      const patternPath = pattern.slice(spaceIdx + 1);
+      
+      // Method must match
+      if (patternMethod !== method.toUpperCase()) continue;
+      
+      // Split paths into segments (filter out empty strings)
+      const patternSegments = patternPath.split('/').filter(s => s.length > 0);
+      const pathSegments = path.split('/').filter(s => s.length > 0);
+      
+      // Must have same number of segments
+      if (patternSegments.length !== pathSegments.length) continue;
+      
+      // Match each segment
       const params = {};
-      let ok = true;
-      for (let i = 0; i < pp.length; i++) {
-        if (pp[i].startsWith(':')) params[pp[i].slice(1)] = rp[i];
-        else if (pp[i] !== rp[i]) { ok = false; break; }
+      let matched = true;
+      for (let i = 0; i < patternSegments.length; i++) {
+        const pSeg = patternSegments[i];
+        const rSeg = pathSegments[i];
+        
+        if (pSeg.startsWith(':')) {
+          // Dynamic parameter - capture it
+          params[pSeg.slice(1)] = rSeg;
+        } else if (pSeg !== rSeg) {
+          // Literal segment mismatch
+          matched = false;
+          break;
+        }
       }
-      if (ok) return { handler: routes[pattern], params };
+      
+      if (matched) {
+        console.log(`✅ Route matched: ${method} ${path} -> ${pattern}`, params);
+        return { handler: routes[pattern], params };
+      }
     }
+    
+    console.error(`❌ Route NOT found: ${method} ${path}`);
+    console.error(`Available routes:`, Object.keys(routes));
     return null;
   }
 
