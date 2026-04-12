@@ -1,52 +1,54 @@
-import { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { attachUserToken, userApi } from '../api/client.js';
+import { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import { userApi, setClientUserToken, setClientUser } from '../api/client.js';
+
+const TOKEN_KEY = 'jtsb_token';
+const USER_KEY = 'jtsb_user';
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY = 'pc_user_token';
-
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY));
-  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem(USER_KEY);
+      return u ? JSON.parse(u) : null;
+    } catch { return null; }
+  });
 
+  // When token changes: persist + attach to API client
   useEffect(() => {
-    attachUserToken(userApi, token);
     if (token) {
-      localStorage.setItem(STORAGE_KEY, token);
-      userApi
-        .get('/auth/me')
-        .then((res) => setUser(res.data.user))
-        .catch(() => {
-          setToken(null);
-          setUser(null);
-          localStorage.removeItem(STORAGE_KEY);
-        });
+      localStorage.setItem(TOKEN_KEY, token);
+      setClientUserToken(userApi, token);
     } else {
-      localStorage.removeItem(STORAGE_KEY);
-      setUser(null);
+      localStorage.removeItem(TOKEN_KEY);
+      setClientUserToken(userApi, null);
     }
   }, [token]);
 
-  const value = useMemo(
-    () => ({
-      token,
-      user,
-      setToken,
-      setUser,
-      logout() {
-        setToken(null);
-        setUser(null);
-      },
-      isAuthenticated: Boolean(token && user),
-    }),
-    [token, user]
-  );
+  // When user changes: persist + attach to API client
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      setClientUser(userApi, user);
+    } else {
+      localStorage.removeItem(USER_KEY);
+      setClientUser(userApi, null);
+    }
+  }, [user]);
+
+  const logout = () => { setToken(null); setUser(null); };
+
+  const value = useMemo(() => ({
+    token, user, setToken, setUser, logout,
+    isAuthenticated: !!token && !!user,
+  }), [token, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }

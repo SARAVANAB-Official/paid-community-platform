@@ -70,16 +70,16 @@ export default function PaymentPage() {
     try {
       const normalizedPaymentId = utr.trim();
 
-      const form = new FormData();
-      form.append('fullName', fullName.trim());
-      form.append('email', email.trim().toLowerCase());
-      form.append('phoneNumber', phoneNumber.trim());
-      form.append('utr', normalizedPaymentId);
-      form.append('screenshot', screenshot);
+      // For frontend-only, we need to pass the file object to the controller
+      const payload = {
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phoneNumber: phoneNumber.trim(),
+        utr: normalizedPaymentId,
+        __file: screenshot, // Special key for file handling
+      };
 
-      await publicApi.post('/payments/submit', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await publicApi.post('/payments/submit', payload);
       setSuccess('Payment submitted. You can track status on the next page.');
       navigate(`/payment/pending?utr=${encodeURIComponent(normalizedPaymentId)}`);
     } catch (err) {
@@ -107,7 +107,7 @@ export default function PaymentPage() {
   return (
     <div className="app-shell">
       <div className="topbar">
-        <div className="brand">Paid Community</div>
+        <div className="brand">JTSB NATURAL LIVE</div>
         <div>
           <Link to="/login">Member login</Link>
           {' · '}

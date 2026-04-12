@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { publicApi, attachUserToken, userApi } from '../api/client.js';
+import { publicApi, setClientUserToken, userApi, setClientUser } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function RegisterPage() {
@@ -26,23 +26,16 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const { data } = await publicApi.post('/auth/register', {
-        name,
-        email,
-        password,
-        utr,
+        name, email, password, utr,
         referralCode: referralCode || undefined,
       });
-      attachUserToken(userApi, data.token);
+      setClientUserToken(userApi, data.token);
+      setClientUser(userApi, data.user);
       setToken(data.token);
       setUser(data.user);
-      navigate('/dashboard', { replace: true });
+      navigate('/user', { replace: true });
     } catch (err) {
-      const isNetworkError = !err.response;
-      setError(
-        isNetworkError
-          ? 'Cannot connect to the server. Please check your connection and try again.'
-          : err.response?.data?.message || 'Registration failed'
-      );
+      setError(err.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -51,55 +44,41 @@ export default function RegisterPage() {
   return (
     <div className="app-shell">
       <div className="topbar">
-        <div className="brand">Create account</div>
+        <div className="brand">JTSB NATURAL LIVE</div>
         <Link to="/payment">Payment</Link>
       </div>
-      <div className="card" style={{ maxWidth: 440, margin: '0 auto' }}>
-        <h1>Register</h1>
-        <p className="muted">Only available after your payment is verified as paid.</p>
+      <div className="card" style={{ maxWidth: 440, margin: '2rem auto' }}>
+        <h1>Create Account</h1>
+        <p className="muted">Register after your payment is verified.</p>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label>Full name</label>
-            <input required value={name} onChange={(e) => setName(e.target.value)} />
+            <input required value={name} onChange={e => setName(e.target.value)} />
           </div>
           <div className="field">
             <label>Email</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-            />
+            <input required type="email" value={email}
+              onChange={e => setEmail(e.target.value)} />
           </div>
           <div className="field">
             <label>Password (min 8 characters)</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-            />
+            <input required type="password" value={password}
+              onChange={e => setPassword(e.target.value)} />
           </div>
           <div className="field">
-            <label>UPI Reference Number (same as payment)</label>
-            <input
-              required
-              value={utr}
-              onChange={(e) => setUtr(e.target.value.replace(/\D/g, '').slice(0, 20))}
-              inputMode="numeric"
-              placeholder="10-20 digit UPI Reference Number"
-            />
-            <div className="hint">Enter the same UPI Reference Number you used during payment</div>
+            <label>UPI Reference Number</label>
+            <input required value={utr}
+              onChange={e => setUtr(e.target.value.replace(/\D/g, '').slice(0, 20))}
+              placeholder="10-20 digit UPI Reference Number" />
           </div>
           <div className="field">
             <label>Referral code (optional)</label>
-            <input value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} />
+            <input value={referralCode}
+              onChange={e => setReferralCode(e.target.value.toUpperCase())} />
           </div>
           <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Creating…' : 'Create account'}
+            {loading ? 'Creating...' : 'Create Account'}
           </button>
         </form>
         <p className="muted" style={{ marginTop: '1rem' }}>

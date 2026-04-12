@@ -58,6 +58,10 @@ export default function AdminDashboardPage() {
           <Link className="btn btn-ghost" to="/admin/users">
             Users
           </Link>
+          {/* ===== NEW: Link to Referrals Page ===== */}
+          <Link className="btn btn-ghost" to="/admin/referrals">
+            Referrals
+          </Link>
           <button type="button" className="btn btn-ghost" onClick={load}>
             Refresh
           </button>
@@ -88,6 +92,50 @@ export default function AdminDashboardPage() {
           </div>
           <div className="label">Total Approved Revenue</div>
         </div>
+      </div>
+
+      {/* ===== NEW: Referral Breakdown Card ===== */}
+      <div className="card" style={{ marginTop: '1.25rem' }}>
+        <h2>Referral Breakdown</h2>
+        <div className="table-wrap" style={{ marginTop: '1rem' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Users with Referrals</th>
+                <th>Users without Referrals</th>
+                <th>Users Who Were Referred</th>
+                <th>Users Who Joined Alone</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <Link to="/admin/users?referral=has_referrals" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                    {stats?.usersWithReferrals ?? '—'}
+                  </Link>
+                </td>
+                <td>
+                  <Link to="/admin/users?referral=no_referrals" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                    {stats?.usersWithoutReferrals ?? '—'}
+                  </Link>
+                </td>
+                <td>
+                  <Link to="/admin/users?referral=was_referred" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                    {stats?.usersWhoWereReferred ?? '—'}
+                  </Link>
+                </td>
+                <td>
+                  <Link to="/admin/users?referral=not_referred" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                    {stats?.usersWhoJoinedAlone ?? '—'}
+                  </Link>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="muted" style={{ marginTop: '1rem' }}>
+          Click on a number to filter users by their referral status.
+        </p>
       </div>
 
       <div className="card">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { publicApi, attachUserToken, userApi } from '../api/client.js';
+import { publicApi, setClientUserToken, userApi, setClientUser } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginPage() {
@@ -17,17 +17,16 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await publicApi.post('/auth/login', { email, password });
-      attachUserToken(userApi, data.token);
+      // Set token and user immediately on both AuthContext and API client
+      // (Direct client calls ensure API is ready before navigation; AuthContext useEffect provides redundancy)
+      setClientUserToken(userApi, data.token);
+      setClientUser(userApi, data.user);
       setToken(data.token);
       setUser(data.user);
-      navigate('/dashboard', { replace: true });
+      // Redirect to user page
+      navigate('/user', { replace: true });
     } catch (err) {
-      const isNetworkError = !err.response;
-      setError(
-        isNetworkError
-          ? 'Cannot connect to the server. Please check your connection and try again.'
-          : err.response?.data?.message || 'Login failed. Please check your credentials.'
-      );
+      setError(err.response?.data?.message || 'Login failed. Check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -36,35 +35,25 @@ export default function LoginPage() {
   return (
     <div className="app-shell">
       <div className="topbar">
-        <div className="brand">Member login</div>
+        <div className="brand">JTSB NATURAL LIVE</div>
         <Link to="/payment">Pay & join</Link>
       </div>
-      <div className="card" style={{ maxWidth: 400, margin: '0 auto' }}>
-        <h1>Welcome back</h1>
+      <div className="card" style={{ maxWidth: 400, margin: '2rem auto' }}>
+        <h1>Sign In</h1>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label>Email</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-            />
+            <input required type="email" value={email}
+              onChange={e => setEmail(e.target.value)} />
           </div>
           <div className="field">
             <label>Password</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
+            <input required type="password" value={password}
+              onChange={e => setPassword(e.target.value)} />
           </div>
           <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
         <p className="muted" style={{ marginTop: '1rem' }}>

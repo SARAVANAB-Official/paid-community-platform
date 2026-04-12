@@ -4,16 +4,17 @@ import PaymentPage from './pages/PaymentPage.jsx';
 import PaymentPendingPage from './pages/PaymentPendingPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
+import UserDashboardPage from './pages/UserDashboardPage.jsx';
+import MyProfilePage from './pages/MyProfilePage.jsx';
 import AdminLoginPage from './pages/AdminLoginPage.jsx';
 import AdminDashboardPage from './pages/AdminDashboardPage.jsx';
 import AdminPaymentsPage from './pages/AdminPaymentsPage.jsx';
 import AdminUsersPage from './pages/AdminUsersPage.jsx';
+import AdminReferralsPage from './pages/AdminReferralsPage.jsx';
 
 function Protected({ children }) {
   const { token, user } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
-  if (!user) return <div className="app-shell muted">Loading…</div>;
+  if (!token || !user) return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -31,39 +32,18 @@ export default function App() {
       <Route path="/payment/pending" element={<PaymentPendingPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <Protected>
-            <DashboardPage />
-          </Protected>
-        }
-      />
+
+      {/* User routes */}
+      <Route path="/dashboard" element={<Protected><UserDashboardPage /></Protected>} />
+      <Route path="/user" element={<Protected><MyProfilePage /></Protected>} />
+
+      {/* Admin routes */}
       <Route path="/admin" element={<AdminLoginPage />} />
-      <Route
-        path="/admin/dashboard"
-        element={
-          <ProtectedAdmin>
-            <AdminDashboardPage />
-          </ProtectedAdmin>
-        }
-      />
-      <Route
-        path="/admin/payments"
-        element={
-          <ProtectedAdmin>
-            <AdminPaymentsPage />
-          </ProtectedAdmin>
-        }
-      />
-      <Route
-        path="/admin/users"
-        element={
-          <ProtectedAdmin>
-            <AdminUsersPage />
-          </ProtectedAdmin>
-        }
-      />
+      <Route path="/admin/dashboard" element={<ProtectedAdmin><AdminDashboardPage /></ProtectedAdmin>} />
+      <Route path="/admin/payments" element={<ProtectedAdmin><AdminPaymentsPage /></ProtectedAdmin>} />
+      <Route path="/admin/users" element={<ProtectedAdmin><AdminUsersPage /></ProtectedAdmin>} />
+      <Route path="/admin/referrals" element={<ProtectedAdmin><AdminReferralsPage /></ProtectedAdmin>} />
+
       <Route path="*" element={<Navigate to="/payment" replace />} />
     </Routes>
   );
