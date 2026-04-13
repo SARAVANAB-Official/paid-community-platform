@@ -127,11 +127,32 @@ export async function checkPaymentStatus(req) {
   };
 }
 
-// Helper to convert File to base64 data URL
-function fileToDataUrl(file) {
+// Helper to convert File to compressed base64 data URL (fast upload)
+async function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Compress: max 800px width, JPEG quality 0.7
+        const MAX_W = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX_W) {
+          h = Math.round((h * MAX_W) / w);
+          w = MAX_W;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        // Compress to JPEG at 70% quality (~50-100KB from 2MB)
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
