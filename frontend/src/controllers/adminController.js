@@ -1,6 +1,8 @@
 // Admin controller - mimics backend adminController.js
 import jwt from '../utils/jwt.js';
-import { Admin, User, Payment, getCollection, saveCollection, DB_KEYS, simpleHash, simpleCompare } from '../db';
+import { Admin, User, Payment, simpleHash, simpleCompare } from '../db';
+import { db } from '../db/index.js';
+import { doc, updateDoc } from 'firebase/firestore';
 
 const ADMIN_JWT_SECRET = import.meta.env.VITE_ADMIN_JWT_SECRET || import.meta.env.VITE_JWT_SECRET || 'frontend-dev-secret-change-in-production';
 
@@ -182,18 +184,11 @@ export async function verifyPayment(req) {
     throw { status: 404, message: 'Payment not found' };
   }
 
-  // Update payment status directly
-  const payments = getCollection(DB_KEYS.payments);
-  const paymentIdx = payments.findIndex(p => p._id === id);
+  // Update payment status using Firestore
+  const paymentRef = doc(db, 'payments', id);
+  await updateDoc(paymentRef, { status: action });
 
-  if (paymentIdx === -1) {
-    throw { status: 404, message: 'Payment not found' };
-  }
-
-  payments[paymentIdx].status = action;
-  saveCollection(DB_KEYS.payments, payments);
-
-  const updatedPayment = payments[paymentIdx];
+  const updatedPayment = { ...payment, status: action };
 
   // If approved, update user's paymentApproved flag
   if (action === 'approved') {

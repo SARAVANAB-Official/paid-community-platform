@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { publicApi, setClientUserToken, userApi, setClientUser } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const REFERRAL_STORAGE_KEY = 'pc_pending_referral';
+
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -11,13 +13,22 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [utr, setUtr] = useState('');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(() => {
+    // Restore from localStorage on mount (survives reload/navigation)
+    const stored = localStorage.getItem(REFERRAL_STORAGE_KEY);
+    return stored || '';
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Capture referral code from URL and persist to localStorage
   useEffect(() => {
     const ref = searchParams.get('ref');
-    if (ref) setReferralCode(ref.trim().toUpperCase());
+    if (ref) {
+      const trimmed = ref.trim().toUpperCase();
+      setReferralCode(trimmed);
+      localStorage.setItem(REFERRAL_STORAGE_KEY, trimmed);
+    }
   }, [searchParams]);
 
   async function handleSubmit(e) {
@@ -33,6 +44,8 @@ export default function RegisterPage() {
       setClientUser(userApi, data.user);
       setToken(data.token);
       setUser(data.user);
+      // Clear stored referral code after successful registration
+      localStorage.removeItem(REFERRAL_STORAGE_KEY);
       navigate('/user', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');

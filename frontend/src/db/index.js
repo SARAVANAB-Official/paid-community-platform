@@ -1,33 +1,28 @@
-// localStorage-based database layer that mimics MongoDB operations
-// This replaces the entire backend database with browser storage
+// Firebase Firestore database layer — replaces localStorage
+// Keeps the same API (User.create, Payment.findOne, etc.) so controllers don't need changes
 
-const DB_KEYS = {
-  users: 'pc_db_users',
-  payments: 'pc_db_payments',
-  admins: 'pc_db_admins',
-};
+import {
+  collection,
+  doc,
+  addDoc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  orderBy,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { db } from '../firebase/config.js';
 
-// Helper functions for localStorage operations
-function getCollection(key) {
-  try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
+const COL_USERS = 'users';
+const COL_PAYMENTS = 'payments';
+const COL_ADMINS = 'admins';
 
-function saveCollection(key, data) {
-  localStorage.setItem(key, JSON.stringify(data));
-}
-
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
-}
-
-// Simple hash function for browser (replaces bcrypt for frontend-only)
+// Simple hash function for passwords (SHA-256 via Web Crypto API)
 async function simpleHash(password) {
-  // Use Web Crypto API for SHA-256 hashing
   const encoder = new TextEncoder();
   const data = encoder.encode(password + 'pc-salt-2026');
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -35,117 +30,135 @@ async function simpleHash(password) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Simple compare function (replaces bcrypt.compare for frontend-only)
+// Simple compare function
 async function simpleCompare(plaintext, hashed) {
   const hash = await simpleHash(plaintext);
   return hash === hashed;
+}
+
+// Generate unique referral code
+function generateReferralCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
 // ===== USERS =====
 
 export const User = {
   async create(userData) {
-    const users = getCollection(DB_KEYS.users);
     const now = new Date().toISOString();
-    const user = {
-      _id: generateId(),
+    const userDoc = {
       name: userData.name,
       email: userData.email,
-      password: userData.password, // Already hashed by caller
+      password: userData.password,
       referralCode: userData.referralCode,
       referredBy: userData.referredBy || null,
       referralsCount: 0,
       paymentApproved: userData.paymentApproved || false,
       createdAt: now,
     };
-    users.push(user);
-    saveCollection(DB_KEYS.users, users);
-    return user;
+
+    const ref = await addDoc(collection(db, COL_USERS), userDoc);
+    return { _id: ref.id, ...userDoc };
   },
 
-  async findOne(query) {
-    const users = getCollection(DB_KEYS.users);
-    if (query.email) {
-      return users.find(u => u.email === query.email.toLowerCase()) || null;
+  async findOne(queryObj) {
+    const colRef = collection(db, COL_USERS);
+    let q;
+
+    if (queryObj.email) {
+      q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
+    } else if (queryObj.referralCode) {
+      q = query(colRef, where('referralCode', '==', queryObj.referralCode.toUpperCase()));
+    } else {
+      return null;
     }
-    if (query.referralCode) {
-      return users.find(u => u.referralCode === query.referralCode.toUpperCase()) || null;
-    }
-    return null;
+
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    const d = snap.docs[0].data();
+    return { _id: snap.docs[0].id, ...d };
   },
 
   async findById(id) {
-    const users = getCollection(DB_KEYS.users);
-    return users.find(u => u._id === id) || null;
+    const ref = doc(db, COL_USERS, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { _id: snap.id, ...snap.data() };
   },
 
-  async updateOne(query, update) {
-    const users = getCollection(DB_KEYS.users);
-    let updated = false;
-    
-    if (query.referralCode) {
-      const idx = users.findIndex(u => u.referralCode === query.referralCode.toUpperCase());
-      if (idx !== -1) {
-        if (update.$set) {
-          Object.assign(users[idx], update.$set);
+  async updateOne(queryObj, update) {
+    const colRef = collection(db, COL_USERS);
+    let q;
+
+    if (queryObj.referralCode) {
+      q = query(colRef, where('referralCode', '==', queryObj.referralCode.toUpperCase()));
+    } else if (queryObj.email) {
+      q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
+    } else {
+      return { modifiedCount: 0 };
+    }
+
+    const snap = await getDocs(q);
+    if (snap.empty) return { modifiedCount: 0 };
+
+    const docSnap = snap.docs[0];
+    const currentData = docSnap.data();
+    const updates = {};
+
+    if (update.$set) {
+      Object.assign(updates, update.$set);
+    }
+    if (update.$inc) {
+      for (const [key, val] of Object.entries(update.$inc)) {
+        if (key === 'referralsCount') {
+          updates[key] = (currentData[key] || 0) + val;
         }
-        if (update.$inc) {
-          if (update.$inc.referralsCount) {
-            users[idx].referralsCount += update.$inc.referralsCount;
-          }
-        }
-        updated = true;
-      }
-    } else if (query.email) {
-      const idx = users.findIndex(u => u.email === query.email.toLowerCase());
-      if (idx !== -1) {
-        if (update.$set) {
-          Object.assign(users[idx], update.$set);
-        }
-        if (update.$inc) {
-          if (update.$inc.referralsCount) {
-            users[idx].referralsCount += update.$inc.referralsCount;
-          }
-        }
-        updated = true;
       }
     }
-    
-    if (updated) {
-      saveCollection(DB_KEYS.users, users);
-    }
-    return { modifiedCount: updated ? 1 : 0 };
+
+    await updateDoc(docSnap.ref, updates);
+    return { modifiedCount: 1 };
   },
 
   async findByIdAndDelete(id) {
-    const users = getCollection(DB_KEYS.users);
-    const idx = users.findIndex(u => u._id === id);
-    if (idx === -1) return null;
-    
-    const deleted = users.splice(idx, 1)[0];
-    saveCollection(DB_KEYS.users, users);
-    return deleted;
+    const ref = doc(db, COL_USERS, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+
+    const data = snap.data();
+    await deleteDoc(ref);
+    return { _id: id, ...data };
   },
 
-  async countDocuments(query = {}) {
-    const users = getCollection(DB_KEYS.users);
-    if (Object.keys(query).length === 0) {
-      return users.length;
+  async countDocuments(queryObj = {}) {
+    const colRef = collection(db, COL_USERS);
+    let q = query(colRef);
+
+    if (queryObj.paymentApproved !== undefined) {
+      q = query(colRef, where('paymentApproved', '==', queryObj.paymentApproved));
     }
-    return users.filter(u => {
-      if (query.paymentApproved !== undefined) {
-        return u.paymentApproved === query.paymentApproved;
-      }
-      return true;
-    }).length;
+
+    const snap = await getDocs(q);
+    return snap.size;
   },
 
-  async find(query = {}) {
-    let users = getCollection(DB_KEYS.users);
-    
-    if (query.$or) {
-      users = users.filter(u => 
-        query.$or.some(condition => {
+  async find(queryObj = {}) {
+    const colRef = collection(db, COL_USERS);
+    let q = query(colRef);
+
+    // Firestore doesn't support $or — we handle it client-side
+    const snap = await getDocs(q);
+    let users = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    if (queryObj.$or) {
+      users = users.filter(u =>
+        queryObj.$or.some(condition => {
           if (condition.name?.$regex) {
             return u.name.toLowerCase().includes(condition.name.$regex.toLowerCase());
           }
@@ -156,7 +169,7 @@ export const User = {
         })
       );
     }
-    
+
     return users;
   },
 };
@@ -165,66 +178,76 @@ export const User = {
 
 export const Payment = {
   async create(paymentData) {
-    const payments = getCollection(DB_KEYS.payments);
     const now = new Date().toISOString();
-    const payment = {
-      _id: generateId(),
+    const paymentDoc = {
       name: paymentData.name,
       email: paymentData.email,
       phoneNumber: paymentData.phoneNumber,
-      paymentId: paymentData.paymentId, // UPI Reference Number
+      paymentId: paymentData.paymentId,
       screenshot: paymentData.screenshot,
       status: paymentData.status || 'pending',
       amount: paymentData.amount,
       createdAt: now,
     };
-    payments.push(payment);
-    saveCollection(DB_KEYS.payments, payments);
-    return payment;
+
+    const ref = await addDoc(collection(db, COL_PAYMENTS), paymentDoc);
+    return { _id: ref.id, ...paymentDoc };
   },
 
-  async findOne(query) {
-    const payments = getCollection(DB_KEYS.payments);
-    if (query.paymentId) {
-      return payments.find(p => p.paymentId === query.paymentId) || null;
+  async findOne(queryObj) {
+    const colRef = collection(db, COL_PAYMENTS);
+    let q;
+
+    if (queryObj.paymentId && queryObj.email) {
+      q = query(colRef, where('paymentId', '==', queryObj.paymentId), where('email', '==', queryObj.email.toLowerCase()));
+    } else if (queryObj.paymentId) {
+      q = query(colRef, where('paymentId', '==', queryObj.paymentId));
+    } else {
+      return null;
     }
-    if (query.email && query.paymentId) {
-      return payments.find(p => 
-        p.email === query.email.toLowerCase() && p.paymentId === query.paymentId
-      ) || null;
-    }
-    return null;
+
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    const d = snap.docs[0].data();
+    return { _id: snap.docs[0].id, ...d };
   },
 
   async findById(id) {
-    const payments = getCollection(DB_KEYS.payments);
-    return payments.find(p => p._id === id) || null;
+    const ref = doc(db, COL_PAYMENTS, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { _id: snap.id, ...snap.data() };
   },
 
-  async countDocuments(query = {}) {
-    const payments = getCollection(DB_KEYS.payments);
-    if (Object.keys(query).length === 0) {
-      return payments.length;
+  async countDocuments(queryObj = {}) {
+    const colRef = collection(db, COL_PAYMENTS);
+    let q = query(colRef);
+
+    if (queryObj.status) {
+      q = query(colRef, where('status', '==', queryObj.status));
+    } else if (queryObj.email) {
+      q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
     }
-    if (query.status) {
-      return payments.filter(p => p.status === query.status).length;
-    }
-    if (query.email) {
-      return payments.filter(p => p.email === query.email.toLowerCase()).length;
-    }
-    return payments.length;
+
+    const snap = await getDocs(q);
+    return snap.size;
   },
 
-  async find(query = {}) {
-    let payments = getCollection(DB_KEYS.payments);
-    
-    if (query.status) {
-      payments = payments.filter(p => p.status === query.status);
+  async find(queryObj = {}) {
+    const colRef = collection(db, COL_PAYMENTS);
+    let q = query(colRef);
+
+    if (queryObj.status) {
+      q = query(colRef, where('status', '==', queryObj.status));
     }
-    
-    if (query.$or) {
-      payments = payments.filter(p => 
-        query.$or.some(condition => {
+
+    const snap = await getDocs(q);
+    let payments = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    if (queryObj.$or) {
+      payments = payments.filter(p =>
+        queryObj.$or.some(condition => {
           if (condition.name?.$regex) {
             return p.name.toLowerCase().includes(condition.name.$regex.toLowerCase());
           }
@@ -241,14 +264,16 @@ export const Payment = {
         })
       );
     }
-    
+
     return payments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   },
 
   async aggregate(pipeline) {
-    const payments = getCollection(DB_KEYS.payments);
+    const colRef = collection(db, COL_PAYMENTS);
+    const snap = await getDocs(query(colRef));
+    const payments = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
     const results = [];
-    
+
     for (const stage of pipeline) {
       if (stage.$match) {
         if (stage.$match.status === 'approved') {
@@ -264,7 +289,7 @@ export const Payment = {
         }
       }
     }
-    
+
     return results;
   },
 };
@@ -273,71 +298,71 @@ export const Payment = {
 
 export const Admin = {
   async create(adminData) {
-    const admins = getCollection(DB_KEYS.admins);
     const now = new Date().toISOString();
-    const admin = {
-      _id: generateId(),
+    const adminDoc = {
       email: adminData.email,
-      password: adminData.password, // Already hashed by caller
+      password: adminData.password,
       createdAt: now,
       updatedAt: now,
     };
-    admins.push(admin);
-    saveCollection(DB_KEYS.admins, admins);
-    return admin;
+
+    const ref = await addDoc(collection(db, COL_ADMINS), adminDoc);
+    return { _id: ref.id, ...adminDoc };
   },
 
-  async findOne(query) {
-    const admins = getCollection(DB_KEYS.admins);
-    if (query.email) {
-      return admins.find(a => a.email === query.email.toLowerCase()) || null;
+  async findOne(queryObj) {
+    const colRef = collection(db, COL_ADMINS);
+    let q;
+
+    if (queryObj.email) {
+      q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
+    } else {
+      return null;
     }
-    return null;
+
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    const d = snap.docs[0].data();
+    return { _id: snap.docs[0].id, ...d };
   },
 };
 
-// ===== UTILITIES =====
-
-export function generateReferralCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
+// ===== SEED DEFAULT ADMIN =====
 
 export async function seedDefaultAdmin() {
-  const admins = getCollection(DB_KEYS.admins);
-  const hashed = await simpleHash('jagan7523');
-  
-  // Check if admin with jagan@gmail.com exists
-  const jaganAdmin = admins.find(a => a.email === 'jagan@gmail.com');
-  
-  if (!jaganAdmin) {
-    // Clear old admins and create new one
-    saveCollection(DB_KEYS.admins, []);
-    await Admin.create({
+  const adminsSnap = await getDocs(collection(db, COL_ADMINS));
+  let adminExists = false;
+
+  for (const d of adminsSnap.docs) {
+    if (d.data().email === 'jagan@gmail.com') {
+      adminExists = true;
+      break;
+    }
+  }
+
+  if (!adminExists) {
+    const hashed = await simpleHash('jagan7523');
+    await addDoc(collection(db, COL_ADMINS), {
       email: 'jagan@gmail.com',
       password: hashed,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
-    console.log('✅ Admin created: jagan@gmail.com');
-  } else if (admins.length > 0) {
-    // Update existing admin to use new credentials
-    admins[0].email = 'jagan@gmail.com';
-    admins[0].password = hashed;
-    saveCollection(DB_KEYS.admins, admins);
-    console.log('✅ Admin updated: jagan@gmail.com');
+    console.log('✅ Default admin created in Firestore: jagan@gmail.com');
   }
 }
 
-// Initialize database on first load
+// ===== INIT DB =====
+
 export async function initDb() {
   await seedDefaultAdmin();
 }
 
-// Export DB_KEYS for controllers that need direct access
-export { DB_KEYS };
+// ===== EXPORTS =====
 
-// Export helper functions for direct localStorage access (used by controllers)
-export { getCollection, saveCollection, simpleHash, simpleCompare };
+export { generateReferralCode, simpleHash, simpleCompare };
+
+// For direct access (used by adminController verifyPayment)
+export { db };
+export const DB_KEYS = { users: COL_USERS, payments: COL_PAYMENTS, admins: COL_ADMINS };
