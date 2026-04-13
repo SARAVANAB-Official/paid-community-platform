@@ -14,7 +14,14 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore
-export const db = getFirestore(app);
+// Initialize Firestore (may throw if Firestore is not enabled in Firebase Console)
+let db;
+try {
+  db = getFirestore(app);
+} catch (e) {
+  console.warn('⚠️ Firestore not available:', e.message);
+  db = null;
+}
 
+export { db };
 export default app;

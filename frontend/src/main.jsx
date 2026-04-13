@@ -6,15 +6,18 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import { initDb } from './db';
 import './index.css';
 
-// Initialize the database before rendering
-initDb().then(() => {
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </React.StrictMode>
-  );
-}).catch(console.error);
+// Initialize the database, but render the app regardless
+// If Firebase fails to init, the app still loads and shows errors in UI
+initDb().catch((err) => {
+  console.error('⚠️ Firebase init error:', err);
+});
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>
+);
