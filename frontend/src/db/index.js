@@ -1,5 +1,4 @@
-// Firebase Firestore database layer — lazy initialization (never blocks rendering)
-
+// Firebase Firestore database layer
 import {
   collection,
   doc,
@@ -11,8 +10,6 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
-  orderBy,
-  serverTimestamp,
 } from 'firebase/firestore';
 import { getDb } from '../firebase/config.js';
 
@@ -49,7 +46,7 @@ function generateReferralCode() {
 
 export const User = {
   async create(userData) {
-    const db = await getDb();
+    const db = getDb();
     const now = new Date().toISOString();
     const userDoc = {
       name: userData.name,
@@ -61,16 +58,14 @@ export const User = {
       paymentApproved: userData.paymentApproved || false,
       createdAt: now,
     };
-
     const ref = await addDoc(collection(db, COL_USERS), userDoc);
     return { _id: ref.id, ...userDoc };
   },
 
   async findOne(queryObj) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_USERS);
     let q;
-
     if (queryObj.email) {
       q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
     } else if (queryObj.referralCode) {
@@ -78,16 +73,14 @@ export const User = {
     } else {
       return null;
     }
-
     const snap = await getDocs(q);
     if (snap.empty) return null;
-
     const d = snap.docs[0].data();
     return { _id: snap.docs[0].id, ...d };
   },
 
   async findById(id) {
-    const db = await getDb();
+    const db = getDb();
     const ref = doc(db, COL_USERS, id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
@@ -95,10 +88,9 @@ export const User = {
   },
 
   async updateOne(queryObj, update) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_USERS);
     let q;
-
     if (queryObj.referralCode) {
       q = query(colRef, where('referralCode', '==', queryObj.referralCode.toUpperCase()));
     } else if (queryObj.email) {
@@ -106,75 +98,56 @@ export const User = {
     } else {
       return { modifiedCount: 0 };
     }
-
     const snap = await getDocs(q);
     if (snap.empty) return { modifiedCount: 0 };
-
     const docSnap = snap.docs[0];
     const currentData = docSnap.data();
     const updates = {};
-
-    if (update.$set) {
-      Object.assign(updates, update.$set);
-    }
+    if (update.$set) Object.assign(updates, update.$set);
     if (update.$inc) {
       for (const [key, val] of Object.entries(update.$inc)) {
-        if (key === 'referralsCount') {
-          updates[key] = (currentData[key] || 0) + val;
-        }
+        if (key === 'referralsCount') updates[key] = (currentData[key] || 0) + val;
       }
     }
-
     await updateDoc(docSnap.ref, updates);
     return { modifiedCount: 1 };
   },
 
   async findByIdAndDelete(id) {
-    const db = await getDb();
+    const db = getDb();
     const ref = doc(db, COL_USERS, id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
-
     const data = snap.data();
     await deleteDoc(ref);
     return { _id: id, ...data };
   },
 
   async countDocuments(queryObj = {}) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_USERS);
     let q = query(colRef);
-
     if (queryObj.paymentApproved !== undefined) {
       q = query(colRef, where('paymentApproved', '==', queryObj.paymentApproved));
     }
-
     const snap = await getDocs(q);
     return snap.size;
   },
 
   async find(queryObj = {}) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_USERS);
-    let q = query(colRef);
-
-    const snap = await getDocs(q);
+    const snap = await getDocs(query(colRef));
     let users = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-
     if (queryObj.$or) {
       users = users.filter(u =>
         queryObj.$or.some(condition => {
-          if (condition.name?.$regex) {
-            return u.name.toLowerCase().includes(condition.name.$regex.toLowerCase());
-          }
-          if (condition.email?.$regex) {
-            return u.email.toLowerCase().includes(condition.email.$regex.toLowerCase());
-          }
+          if (condition.name?.$regex) return u.name.toLowerCase().includes(condition.name.$regex.toLowerCase());
+          if (condition.email?.$regex) return u.email.toLowerCase().includes(condition.email.$regex.toLowerCase());
           return false;
         })
       );
     }
-
     return users;
   },
 };
@@ -183,7 +156,7 @@ export const User = {
 
 export const Payment = {
   async create(paymentData) {
-    const db = await getDb();
+    const db = getDb();
     const now = new Date().toISOString();
     const paymentDoc = {
       name: paymentData.name,
@@ -195,16 +168,14 @@ export const Payment = {
       amount: paymentData.amount,
       createdAt: now,
     };
-
     const ref = await addDoc(collection(db, COL_PAYMENTS), paymentDoc);
     return { _id: ref.id, ...paymentDoc };
   },
 
   async findOne(queryObj) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_PAYMENTS);
     let q;
-
     if (queryObj.paymentId && queryObj.email) {
       q = query(colRef, where('paymentId', '==', queryObj.paymentId), where('email', '==', queryObj.email.toLowerCase()));
     } else if (queryObj.paymentId) {
@@ -212,16 +183,14 @@ export const Payment = {
     } else {
       return null;
     }
-
     const snap = await getDocs(q);
     if (snap.empty) return null;
-
     const d = snap.docs[0].data();
     return { _id: snap.docs[0].id, ...d };
   },
 
   async findById(id) {
-    const db = await getDb();
+    const db = getDb();
     const ref = doc(db, COL_PAYMENTS, id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
@@ -229,78 +198,51 @@ export const Payment = {
   },
 
   async countDocuments(queryObj = {}) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_PAYMENTS);
     let q = query(colRef);
-
-    if (queryObj.status) {
-      q = query(colRef, where('status', '==', queryObj.status));
-    } else if (queryObj.email) {
-      q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
-    }
-
+    if (queryObj.status) q = query(colRef, where('status', '==', queryObj.status));
+    else if (queryObj.email) q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
     const snap = await getDocs(q);
     return snap.size;
   },
 
   async find(queryObj = {}) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_PAYMENTS);
     let q = query(colRef);
-
-    if (queryObj.status) {
-      q = query(colRef, where('status', '==', queryObj.status));
-    }
-
+    if (queryObj.status) q = query(colRef, where('status', '==', queryObj.status));
     const snap = await getDocs(q);
     let payments = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-
     if (queryObj.$or) {
       payments = payments.filter(p =>
         queryObj.$or.some(condition => {
-          if (condition.name?.$regex) {
-            return p.name.toLowerCase().includes(condition.name.$regex.toLowerCase());
-          }
-          if (condition.email?.$regex) {
-            return p.email.toLowerCase().includes(condition.email.$regex.toLowerCase());
-          }
-          if (condition.phoneNumber?.$regex) {
-            return p.phoneNumber.includes(condition.phoneNumber.$regex);
-          }
-          if (condition.paymentId?.$regex) {
-            return p.paymentId.includes(condition.paymentId.$regex);
-          }
+          if (condition.name?.$regex) return p.name.toLowerCase().includes(condition.name.$regex.toLowerCase());
+          if (condition.email?.$regex) return p.email.toLowerCase().includes(condition.email.$regex.toLowerCase());
+          if (condition.phoneNumber?.$regex) return p.phoneNumber.includes(condition.phoneNumber.$regex);
+          if (condition.paymentId?.$regex) return p.paymentId.includes(condition.paymentId.$regex);
           return false;
         })
       );
     }
-
     return payments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   },
 
   async aggregate(pipeline) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_PAYMENTS);
     const snap = await getDocs(query(colRef));
     const payments = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
     const results = [];
-
     for (const stage of pipeline) {
-      if (stage.$match) {
-        if (stage.$match.status === 'approved') {
-          results.push(...payments.filter(p => p.status === 'approved'));
-        }
+      if (stage.$match && stage.$match.status === 'approved') {
+        results.push(...payments.filter(p => p.status === 'approved'));
       }
-      if (stage.$group) {
-        if (stage.$group._id === null) {
-          if (stage.$group.totalAmount) {
-            const sum = results.reduce((acc, p) => acc + p.amount, 0);
-            return [{ _id: null, totalAmount: sum }];
-          }
-        }
+      if (stage.$group && stage.$group._id === null && stage.$group.totalAmount) {
+        const sum = results.reduce((acc, p) => acc + p.amount, 0);
+        return [{ _id: null, totalAmount: sum }];
       }
     }
-
     return results;
   },
 };
@@ -309,7 +251,7 @@ export const Payment = {
 
 export const Admin = {
   async create(adminData) {
-    const db = await getDb();
+    const db = getDb();
     const now = new Date().toISOString();
     const adminDoc = {
       email: adminData.email,
@@ -317,25 +259,17 @@ export const Admin = {
       createdAt: now,
       updatedAt: now,
     };
-
     const ref = await addDoc(collection(db, COL_ADMINS), adminDoc);
     return { _id: ref.id, ...adminDoc };
   },
 
   async findOne(queryObj) {
-    const db = await getDb();
+    const db = getDb();
     const colRef = collection(db, COL_ADMINS);
-    let q;
-
-    if (queryObj.email) {
-      q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
-    } else {
-      return null;
-    }
-
+    if (!queryObj.email) return null;
+    const q = query(colRef, where('email', '==', queryObj.email.toLowerCase()));
     const snap = await getDocs(q);
     if (snap.empty) return null;
-
     const d = snap.docs[0].data();
     return { _id: snap.docs[0].id, ...d };
   },
@@ -345,40 +279,30 @@ export const Admin = {
 
 export async function seedDefaultAdmin() {
   try {
-    const db = await getDb();
+    const db = getDb();
+    if (!db) return; // Firestore not available
     const colRef = collection(db, COL_ADMINS);
     const adminsSnap = await getDocs(query(colRef));
     let adminExists = false;
-
     for (const d of adminsSnap.docs) {
-      if (d.data().email === 'jagan@gmail.com') {
-        adminExists = true;
-        break;
-      }
+      if (d.data().email === 'jagan@gmail.com') { adminExists = true; break; }
     }
-
     if (!adminExists) {
       const hashed = await simpleHash('jagan7523');
       await addDoc(colRef, {
-        email: 'jagan@gmail.com',
-        password: hashed,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        email: 'jagan@gmail.com', password: hashed,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       });
-      console.log('✅ Default admin created in Firestore: jagan@gmail.com');
+      console.log('✅ Default admin seeded in Firestore');
     }
   } catch (e) {
-    console.error('⚠️ seedDefaultAdmin error:', e.message);
+    console.error('⚠️ seedDefaultAdmin:', e.message);
   }
 }
-
-// ===== INIT DB =====
 
 export async function initDb() {
   await seedDefaultAdmin();
 }
-
-// ===== EXPORTS =====
 
 export { generateReferralCode, simpleHash, simpleCompare };
 export const DB_KEYS = { users: COL_USERS, payments: COL_PAYMENTS, admins: COL_ADMINS };
