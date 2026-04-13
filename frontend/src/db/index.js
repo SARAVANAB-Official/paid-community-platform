@@ -1,5 +1,4 @@
-// Firebase Firestore database layer — replaces localStorage
-// Keeps the same API (User.create, Payment.findOne, etc.) so controllers don't need changes
+// Firebase Firestore database layer — lazy initialization (never blocks rendering)
 
 import {
   collection,
@@ -15,7 +14,7 @@ import {
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../firebase/config.js';
+import { getDb } from '../firebase/config.js';
 
 const COL_USERS = 'users';
 const COL_PAYMENTS = 'payments';
@@ -50,6 +49,7 @@ function generateReferralCode() {
 
 export const User = {
   async create(userData) {
+    const db = await getDb();
     const now = new Date().toISOString();
     const userDoc = {
       name: userData.name,
@@ -67,6 +67,7 @@ export const User = {
   },
 
   async findOne(queryObj) {
+    const db = await getDb();
     const colRef = collection(db, COL_USERS);
     let q;
 
@@ -86,6 +87,7 @@ export const User = {
   },
 
   async findById(id) {
+    const db = await getDb();
     const ref = doc(db, COL_USERS, id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
@@ -93,6 +95,7 @@ export const User = {
   },
 
   async updateOne(queryObj, update) {
+    const db = await getDb();
     const colRef = collection(db, COL_USERS);
     let q;
 
@@ -127,6 +130,7 @@ export const User = {
   },
 
   async findByIdAndDelete(id) {
+    const db = await getDb();
     const ref = doc(db, COL_USERS, id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
@@ -137,6 +141,7 @@ export const User = {
   },
 
   async countDocuments(queryObj = {}) {
+    const db = await getDb();
     const colRef = collection(db, COL_USERS);
     let q = query(colRef);
 
@@ -149,10 +154,10 @@ export const User = {
   },
 
   async find(queryObj = {}) {
+    const db = await getDb();
     const colRef = collection(db, COL_USERS);
     let q = query(colRef);
 
-    // Firestore doesn't support $or — we handle it client-side
     const snap = await getDocs(q);
     let users = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
 
@@ -178,6 +183,7 @@ export const User = {
 
 export const Payment = {
   async create(paymentData) {
+    const db = await getDb();
     const now = new Date().toISOString();
     const paymentDoc = {
       name: paymentData.name,
@@ -195,6 +201,7 @@ export const Payment = {
   },
 
   async findOne(queryObj) {
+    const db = await getDb();
     const colRef = collection(db, COL_PAYMENTS);
     let q;
 
@@ -214,6 +221,7 @@ export const Payment = {
   },
 
   async findById(id) {
+    const db = await getDb();
     const ref = doc(db, COL_PAYMENTS, id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
@@ -221,6 +229,7 @@ export const Payment = {
   },
 
   async countDocuments(queryObj = {}) {
+    const db = await getDb();
     const colRef = collection(db, COL_PAYMENTS);
     let q = query(colRef);
 
@@ -235,6 +244,7 @@ export const Payment = {
   },
 
   async find(queryObj = {}) {
+    const db = await getDb();
     const colRef = collection(db, COL_PAYMENTS);
     let q = query(colRef);
 
@@ -269,6 +279,7 @@ export const Payment = {
   },
 
   async aggregate(pipeline) {
+    const db = await getDb();
     const colRef = collection(db, COL_PAYMENTS);
     const snap = await getDocs(query(colRef));
     const payments = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
@@ -298,6 +309,7 @@ export const Payment = {
 
 export const Admin = {
   async create(adminData) {
+    const db = await getDb();
     const now = new Date().toISOString();
     const adminDoc = {
       email: adminData.email,
@@ -311,6 +323,7 @@ export const Admin = {
   },
 
   async findOne(queryObj) {
+    const db = await getDb();
     const colRef = collection(db, COL_ADMINS);
     let q;
 
@@ -331,25 +344,31 @@ export const Admin = {
 // ===== SEED DEFAULT ADMIN =====
 
 export async function seedDefaultAdmin() {
-  const adminsSnap = await getDocs(collection(db, COL_ADMINS));
-  let adminExists = false;
+  try {
+    const db = await getDb();
+    const colRef = collection(db, COL_ADMINS);
+    const adminsSnap = await getDocs(query(colRef));
+    let adminExists = false;
 
-  for (const d of adminsSnap.docs) {
-    if (d.data().email === 'jagan@gmail.com') {
-      adminExists = true;
-      break;
+    for (const d of adminsSnap.docs) {
+      if (d.data().email === 'jagan@gmail.com') {
+        adminExists = true;
+        break;
+      }
     }
-  }
 
-  if (!adminExists) {
-    const hashed = await simpleHash('jagan7523');
-    await addDoc(collection(db, COL_ADMINS), {
-      email: 'jagan@gmail.com',
-      password: hashed,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    console.log('✅ Default admin created in Firestore: jagan@gmail.com');
+    if (!adminExists) {
+      const hashed = await simpleHash('jagan7523');
+      await addDoc(colRef, {
+        email: 'jagan@gmail.com',
+        password: hashed,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      console.log('✅ Default admin created in Firestore: jagan@gmail.com');
+    }
+  } catch (e) {
+    console.error('⚠️ seedDefaultAdmin error:', e.message);
   }
 }
 
@@ -362,7 +381,4 @@ export async function initDb() {
 // ===== EXPORTS =====
 
 export { generateReferralCode, simpleHash, simpleCompare };
-
-// For direct access (used by adminController verifyPayment)
-export { db };
 export const DB_KEYS = { users: COL_USERS, payments: COL_PAYMENTS, admins: COL_ADMINS };
